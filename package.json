@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "file-saver": "^2.0.5",
+    "sweetalert2": "^11.4.6"
+  },
+  "scripts": {
+    "build-dev": "esbuild src/app.ts --bundle --sourcemap --target=es6 --outfile=dist/app.js",
+    "build": "esbuild src/app.ts --bundle --minify --target=es6 --outfile=dist/app.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.14.27",
+    "esbuild-serve": "^1.0.1"
+  }
+}

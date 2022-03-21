@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ProgressionGraph</title>
+
+    <meta charset="utf8" />
+    <meta name="author" content="Autumn Beauchesne">
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="shortcut icon" href="#" />
+
+    <script src="./dist/app.js"></script>
+    <link rel="stylesheet" href="reset.css" />
+    <link rel="stylesheet" href="style.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Fenix" />
+</head>
+
+<body>
+    <div id="header-toolbar">
+        <div class="header-toolbar-elements">
+            <span class="title">ProgressionGraph</span>
+            <button type="button" id="button-config">Load Configuration</button>
+            <button type="button" id="button-run" disabled="true">Test (Debug)</button>
+            <span class="spacing">|</span>
+            <button type="button" id="button-silentRun" disabled="true">Run (Aggregate)</button>
+            <label for="input-sampleSize">Sample Size:</label>
+            <input type="number" id="input-sampleSize" min="10" max="10000" step="10" value="100">
+            <span class="spacing">|</span>
+            <button type="button" id="button-clear">Clear Log</button>
+        </div>
+    </div>
+    <div id="page-body-window">
+        <div id="page-body-frame">
+            <div id="log" class="console"></div>
+        </div>
+    </div>
+</body>
+
+</html>
