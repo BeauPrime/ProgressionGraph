@@ -1,10 +1,14 @@
 // #region Page Events
 
 export type Callback = () => void;
-export type RAFCallback = (deltaTime: number) => void;
-export type RAFId = [number];
+export type DTCallback = (deltaTime: number) => void;
+export type AlarmId = {
+    id: number,
+    period: number,
+    continuous?: boolean
+};
 
-const INVALID_RAFID: number = Number.NaN;
+const INVALID_ALARM_ID: number = 0;
 
 /**
  * Invokes a method when the page is finished loading.
@@ -29,10 +33,14 @@ export function OnPageClose(invoke: Callback) {
 /**
  * Callback on animation frame.
  */
-export function OnAnimationFrame(callback: RAFCallback, maxDeltaTime: number = 0): RAFId {
+export function OnAnimationFrame(callback: DTCallback, maxDeltaTime: number = 0): AlarmId {
     let lastRecorded = performance.now();
 
-    let id: RAFId = [0];
+    let id: AlarmId = {
+        id: 0,
+        period: 0,
+        continuous: false
+    };
     function RAF(timestamp: DOMHighResTimeStamp): void {
         let deltaTime = timestamp - lastRecorded;
         lastRecorded = timestamp;
@@ -41,22 +49,22 @@ export function OnAnimationFrame(callback: RAFCallback, maxDeltaTime: number = 0
         }
 
         callback && callback(deltaTime);
-        if (id[0] != INVALID_RAFID) {
-            id[0] = requestAnimationFrame(RAF);
+        if (id.id != INVALID_ALARM_ID) {
+            id.id = requestAnimationFrame(RAF);
         }
     }
 
-    id[0] = requestAnimationFrame(RAF);
+    id.id = requestAnimationFrame(RAF);
     return id;
 }
 
 /**
  * Cancels an animation frame callback.
  */
-export function CancelAnimationFrame(id: RAFId): boolean {
-    if (id[0] != INVALID_RAFID) {
-        cancelAnimationFrame(id[0]);
-        id[0] = INVALID_RAFID;
+export function CancelAnimationFrame(id: AlarmId): boolean {
+    if (id.id != INVALID_ALARM_ID) {
+        cancelAnimationFrame(id.id);
+        id.id = INVALID_ALARM_ID;
         return true;
     } else {
         return false;

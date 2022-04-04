@@ -12,6 +12,7 @@ let configButton: HTMLButtonElement;
 let runButton: HTMLButtonElement;
 let runFullButton: HTMLButtonElement;
 let sampleCountInput: HTMLInputElement;
+let showPathInput: HTMLInputElement;
 
 let runQueue: TaskQueue;
 let currentRun: TaskId = 0;
@@ -24,10 +25,11 @@ OnPageLoad(() => {
     
     runQueue = new TaskQueue();
 
-    configButton = <HTMLButtonElement> document.getElementById("button-config")
-    runButton = <HTMLButtonElement> document.getElementById("button-run")
-    runFullButton = <HTMLButtonElement> document.getElementById("button-silentRun")
+    configButton = <HTMLButtonElement> document.getElementById("button-config");
+    runButton = <HTMLButtonElement> document.getElementById("button-run");
+    runFullButton = <HTMLButtonElement> document.getElementById("button-silentRun");
     sampleCountInput = <HTMLInputElement> document.getElementById("input-sampleSize");
+    showPathInput = <HTMLInputElement> document.getElementById("input-showPathToggle");
     
     configButton.onclick = OnConfigClicked;
     runButton.onclick = OnRunClicked;
@@ -43,8 +45,8 @@ OnPageLoad(() => {
         LogFlush();
     }, 50);
 
-    LogWrite("---- Progression Graph (v0.1) ---- ");
-    LogWrite("---- © 2022, Autumn Beauchesne --- ");
+    LogWrite("---- Progression Graph (v0.1.1) ---- ");
+    LogWrite("---- © 2022, Autumn Beauchesne ----- ");
     LogWrite("\n\nClick on 'Load Configuration' to start!");
 });
 
@@ -100,7 +102,7 @@ function OnRunSilentClicked() {
     }
 
     runQueue.Cancel(currentRun);
-    runQueue.Schedule(RunAggregateTrial(sampleCountInput.valueAsNumber, modifiers), "Aggregate Trial");
+    currentRun = runQueue.Schedule(RunAggregateTrial(sampleCountInput.valueAsNumber, modifiers), "Aggregate Trial");
 }
 
 function RunStep(state: TraversalState): boolean {
@@ -132,14 +134,17 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
     const state: TraversalState = new TraversalState();
     const agg: AggregateState = new AggregateState();
     const localModifiers = CopyModifiers(modifiers);
+    const showPaths = showPathInput.checked;
     
     let increment: number;
     if (count <= 100) {
         increment = 10;
     } else if (count <= 1000) {
         increment = 100;
-    } else {
+    } else if (count < 10000) {
         increment = 500;
+    } else {
+        increment = 1000
     }
 
     LogWrite("-- Starting aggregate --");
@@ -159,7 +164,7 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
         }
     }
 
-    LogWrite("Finished running %1 trials; Aggregating results...", count);
+    LogWrite("Finished generating %1 samples; Aggregating results...", count);
     yield TaskResult.NEXT_FRAME;
     const result = AggregateProcess(agg);
     console.log(result);
@@ -168,12 +173,14 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
     LogWrite("\n-- Results --");
     yield;
     for(const [key, value] of Object.entries(result.open)) {
-        LogWrite("Open <b>%1</b> nodes: Mean %2 / Median %3 / Mode %4", key, value.mean.toFixed(2), value.median.toFixed(0), value.mode.toFixed(0));
+        LogWrite("Open <b>%1</b> nodes: Mean %2 / Median %3 / Mode %4 / Min %5 / Max %6", key,
+            value.mean.toFixed(2), value.median.toFixed(0), value.mode.toFixed(0), value.min.toFixed(0), value.max.toFixed(0));
     }
     yield;
     const tokenEntries: TokenStatEntry[] = [];
     const completeEntries: NodeStatEntry[] = [];
     const unfinishedEntries: NodeStatEntry[] = [];
+    const commonPaths: NodeStatEntry[] = [];
     for(const [key, value] of Object.entries(result.endState)) {
         if (List.Has(loadedConfig.tokenIds, key)) {
             tokenEntries.push({id: key, stat: value, added: result.addedTokens[key], consumed: result.consumedTokens[key]});
@@ -184,6 +191,14 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
 
     for(const [key, value] of Object.entries(result.unfinished)) {
         unfinishedEntries.push({id: key, percentage: Math.ceil(value.mean * 100)});
+    }
+    yield;
+
+    if (showPaths) {
+        for(const [key, value] of Object.entries(result.steps)) {
+            commonPaths.push({id: key, percentage: Math.ceil(value.mean * 100)});
+        }
+        yield;
     }
 
     yield;
@@ -207,18 +222,31 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
         }
     });
     yield;
+    if (showPaths) {
+        commonPaths.sort((a, b) => {
+            if (b.percentage == a.percentage) {
+                return AlphabetCompare(a.id, b.id);
+            } else {
+                return b.percentage - a.percentage;
+            }
+        });
+        yield;
+    }
 
     LogWrite("");
     for(const token of tokenEntries) {
-        LogWrite("<b>%1</b> Final: Mean %2 / Median %3 / Mode %4", token.id, token.stat.mean.toFixed(2), token.stat.median, token.stat.mode);
+        LogWrite("<b>%1</b> Final: Mean %2 / Median %3 / Mode %4 / Min %5 / Max %6", token.id,
+            token.stat.mean.toFixed(2), token.stat.median, token.stat.mode, token.stat.min, token.stat.max);
         if (token.added) {
-            LogWrite("> Added: Mean %2 / Median %3 / Mode %4", token.id, token.added.mean.toFixed(2), token.added.median, token.added.mode);
+            LogWrite("> Added: Mean %2 / Median %3 / Mode %4 / Min %5 / Max %6", token.id,
+                token.added.mean.toFixed(2), token.added.median, token.added.mode, token.stat.min, token.stat.max);
         }
         if (token.consumed) {
-            LogWrite("> Consumed: Mean %2 / Median %3 / Mode %4", token.id, token.consumed.mean.toFixed(2), token.consumed.median, token.consumed.mode);
+            LogWrite("> Consumed: Mean %2 / Median %3 / Mode %4 / Min %5 / Max %6", token.id,
+                token.consumed.mean.toFixed(2), token.consumed.median, token.consumed.mode, token.stat.min, token.stat.max);
         }
     }
-    yield;
+    yield TaskResult.NEXT_FRAME;
     
     LogWrite("\n-- %1 nodes completed", completeEntries.length);
     for(const node of completeEntries) {
@@ -228,7 +256,7 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
             LogWrite("<b>%1</b> Completed: %2%", node.id, node.percentage);
         }
     }
-    yield;
+    yield TaskResult.NEXT_FRAME;
 
     LogWrite("\n-- %1 nodes unfinished", unfinishedEntries.length);
     for(const node of unfinishedEntries) {
@@ -236,6 +264,19 @@ function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
             LogWarn("<b>%1</b> Unfinished: %2%", node.id, node.percentage);
         } else {
             LogError("<b>%1</b> Unfinished: %2%", node.id, node.percentage);
+        }
+    }
+    yield TaskResult.NEXT_FRAME;
+
+    if (showPaths) {
+        LogWrite("\n-- %1 paths traversed", commonPaths.length);
+        for(const node of commonPaths) {
+            const sections = node.id.split("->");
+            if (sections.length > 1) {
+                LogWrite("<b>%1 to %2</b>: %3%", sections[0], sections[1], node.percentage);
+            } else {
+                LogWrite("<b>%1</b>: %2%", node.id, node.percentage);
+            }
         }
     }
 }
@@ -282,6 +323,6 @@ function OnConfigurationRead(txt: string): void {
         LogWrite("\n -- Testing Instructions --");
         LogWrite("Click 'Test (Debug)' to run a single trial");
         LogWrite("Click 'Run (Aggregate)' to run an aggregate trial");
-        LogWrite("Adjust 'Sample Size' to change the number of trials");
+        LogWrite("Adjust 'Sample Size' to change the number of samples");
     }
 }

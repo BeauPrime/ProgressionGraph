@@ -14,7 +14,9 @@ type CounterMap = {
 export type Statistic = {
     mean: number,
     median: number,
-    mode: number
+    mode: number,
+    min: number,
+    max: number
 };
 
 export type StatisticMap = {
@@ -107,10 +109,12 @@ export function AggregateProcess(aggregator: AggregateState): AggregateStatistic
 
 function Average(counters: CounterMap, statistics: StatisticMap, sampleCount: number): void {
     for(const [key, val] of Object.entries(counters)) {
-        const statVal = statistics[key] = {
+        const statVal: Statistic = statistics[key] = {
             mean: 0,
             median: 0,
-            mode: 0
+            mode: 0,
+            min: 0,
+            max: 0
         };
 
         let needsZero = sampleCount - val.values.length;
@@ -122,6 +126,8 @@ function Average(counters: CounterMap, statistics: StatisticMap, sampleCount: nu
         statVal.mean = val.sum / sampleCount;
         statVal.median = val.values[(val.values.length / 2) | 0];
         statVal.mode = FindMode(val.values);
+        statVal.min = val.values[0];
+        statVal.max = val.values[val.values.length - 1];
     }
 }
 

@@ -109,7 +109,15 @@ export function TraversalPerformStep(state: TraversalState, config: Configuratio
     // shuffle currently available set
     Shuffle(state.available);
 
-    const id = state.available[0];
+    let id = state.available[0];
+    let idx = 1;
+    while(config.disableManualTraversal.has(id)) {
+        if (idx >= state.available.length) {
+            return null;
+        }
+        
+        id = state.available[idx++];
+    }
     const stepTaken = Visit(state, config, [id], id, null, flags);
     const auto: string[] = [];
     ScanForVisible(state, config, auto, flags);

@@ -23,11 +23,14 @@
         <div class="header-toolbar-elements">
             <span class="title">ProgressionGraph</span>
             <button type="button" id="button-config">Load Configuration</button>
+            <span class="spacing">|</span>
             <button type="button" id="button-run" disabled="true">Test (Debug)</button>
             <span class="spacing">|</span>
-            <button type="button" id="button-silentRun" disabled="true">Run (Aggregate)</button>
             <label for="input-sampleSize">Sample Size:</label>
-            <input type="number" id="input-sampleSize" min="10" max="10000" step="10" value="100">
+            <input type="number" id="input-sampleSize" min="10" max="100000" step="10" value="100">
+            <label for="input-showPathToggle">Show Path Stats:</label>
+            <input type="checkbox" id="input-showPathToggle" value="show">
+            <button type="button" id="button-silentRun" disabled="true">Run (Aggregate)</button>
             <span class="spacing">|</span>
             <button type="button" id="button-clear">Clear Log</button>
         </div>

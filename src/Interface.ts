@@ -4,6 +4,8 @@ var logElement: HTMLDivElement = null;
 var frameElement: HTMLDivElement = null;
 const queuedLogLines: string[] = [];
 
+// #region Log
+
 export function LogInitialize() {
     logElement = <HTMLDivElement> document.getElementById("log");
     frameElement = <HTMLDivElement> document.getElementById("page-body-frame");
@@ -43,3 +45,5 @@ export function LogFlush() {
         frameElement.scrollTo(0, frameElement.scrollHeight);
     }
 }
+
+// #endregion Log

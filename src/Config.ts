@@ -35,6 +35,7 @@ export type NodeData = {
     id: string,
     type?: string,
     isToken: boolean,
+    disableTraversal: boolean,
     unlockType: UnlockType,
     requires: NodeRef[],
     results: NodeRef[]
@@ -85,6 +86,11 @@ export class Configuration {
      * Set of nodes a traversal starts with.
      */
     public readonly startWith: NodeAmountCollection = { };
+
+    /**
+     * Set of node ids that will not be manually traversed.
+     */
+    public readonly disableManualTraversal: Set<string> = new Set();
 }
 
 /**
@@ -113,6 +119,10 @@ export function ParseConfig(data: string) : Configuration {
         } else {
             config.nodes.set(value.id, value);
         }
+
+        if (value.disableTraversal) {
+            config.disableManualTraversal.add(value.id);
+        }
     }
 
     config.ReportTokens = GetTokenReportCallback(config);
@@ -127,6 +137,8 @@ function ApplyDefaultsToNode(node: NodeData, id: string) {
     AssignDefault(node, "id", id);
     AssignDefault(node, "unlockType", UnlockTraverse);
     AssignDefault(node, "isToken", false);
+    AssignDefault(node, "disableTraversal", false);
+
     if (!node.requires) {
         node.requires = [];
     } else {
