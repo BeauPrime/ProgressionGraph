@@ -19,6 +19,8 @@ let currentRun: TaskId = 0;
 
 let modifiers: RuntimeModifiers = {};
 
+// #region Page Handlers
+
 OnPageLoad(() => {
     LogInitialize();
     LogReset();
@@ -33,7 +35,7 @@ OnPageLoad(() => {
     
     configButton.onclick = OnConfigClicked;
     runButton.onclick = OnRunClicked;
-    runFullButton.onclick = OnRunSilentClicked;
+    runFullButton.onclick = OnRunAggregateClicked;
     runButton.disabled = true;
     runFullButton.disabled = true;
 
@@ -56,6 +58,10 @@ OnPageClose(() => {
     currentRun = null;
 });
 
+// #endregion // Page Handlers
+
+// #region Configuration
+
 function OnConfigClicked() {
     Swal.fire({
         "titleText": "Select a Progression JSON to import",
@@ -69,6 +75,44 @@ function OnConfigClicked() {
         file && ReadFileAsText(file, OnConfigurationRead);
     });
 }
+
+function OnConfigurationRead(txt: string): void {
+    let config:Configuration;
+    try {
+        config = ParseConfig(txt);
+        if (!config) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Could not load config',
+                text: 'Your file was unable to be parsed into a progression JSON.\nCheck that you are uploading the right file'
+            });
+            return;
+        }
+    } catch(e) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Could not load config',
+            text: sprintf("An error occurred: %1\nCheck that you are uploading the right file", e)
+        });
+        return;
+    }
+
+    const hadConfig = !!loadedConfig;
+    loadedConfig = config;
+    LogWrite("Loaded configuration: %1 nodes, %2 tokens, %3 constants", config.nodes.size, config.tokens.size, Object.entries(config.constants).length);
+    runButton.disabled = false;
+    runFullButton.disabled = false;
+    if (!hadConfig) {
+        LogWrite("\n -- Testing Instructions --");
+        LogWrite("Click 'Run (Debug)' to run a single trial");
+        LogWrite("Click 'Run (Aggregate)' to run an aggregate trial");
+        LogWrite("Adjust 'Sample Size' to change the number of samples");
+    }
+}
+
+// #endregion // Configuration
+
+// #region Run
 
 function OnRunClicked() {
     if (!loadedConfig) {
@@ -86,7 +130,49 @@ function OnRunClicked() {
     currentRun = runQueue.ScheduleWithContext(RunStep, state);
 }
 
-function OnRunSilentClicked() {
+function RunStep(state: TraversalState): boolean {
+    LogWrite("<b>Current Status at %1:</b>", state.path.length);
+    LogWrite("> %1", loadedConfig.ReportTokens(state.status));
+    const step = TraversalPerformStep(state, loadedConfig, TraversalFlags.DEBUG);
+    if (step != null) {
+        LogWrite("<i>Step %1:</i> %2", state.path.length, StepToString(step));
+        return true;
+    } else {
+        state.hidden.sort(AlphabetCompare);
+        LogWrite("Finished with %1 unvisited nodes!", state.hidden.length);
+        for(const [id, status] of Object.entries(state.status)) {
+            LogWrite("<b>State></b> %1: %2", id, status);
+        }
+        const rootMissing = new Set(state.hidden);
+        for(const id of state.hidden) {
+            const missing = GetMissingRequirements(state, loadedConfig, id);
+            if (missing.manualUnlock) {
+                LogError("<i>Unvisited></i> %1: Needed Manual Unlock, %2", id, missing.ids.join(", "));
+            } else {
+                LogError("<i>Unvisited></i> %1: Needed %2", id, missing.ids.join(", "));
+            }
+            for(const prereq of missing.ids) {
+                if (state.hidden.indexOf(prereq) >= 0) {
+                    rootMissing.delete(id);
+                    break;
+                }
+            }
+        }
+        if (rootMissing.size > 0) {
+            LogError("<i>Most Important Unvisited Nodes:</i>");
+            for(const id of rootMissing) {
+                LogError("> %1", id);
+            }
+        }
+        return false;
+    }
+}
+
+// #endregion // Run
+
+// #region Aggregate
+
+function OnRunAggregateClicked() {
     if (!loadedConfig) {
         LogWrite("No configuration loaded!");
         return;
@@ -103,31 +189,6 @@ function OnRunSilentClicked() {
 
     runQueue.Cancel(currentRun);
     currentRun = runQueue.Schedule(RunAggregateTrial(sampleCountInput.valueAsNumber, modifiers), "Aggregate Trial");
-}
-
-function RunStep(state: TraversalState): boolean {
-    LogWrite("<b>Current Status at %1:</b>", state.path.length);
-    LogWrite("> %1", loadedConfig.ReportTokens(state.status));
-    const step = TraversalPerformStep(state, loadedConfig, TraversalFlags.DEBUG);
-    if (step != null) {
-        LogWrite("<i>Step %1:</i> %2", state.path.length, StepToString(step));
-        return true;
-    } else {
-        state.hidden.sort(AlphabetCompare);
-        LogWrite("Finished with %1 unvisited nodes!", state.hidden.length);
-        for(const [id, status] of Object.entries(state.status)) {
-            LogWrite("<b>State></b> %1: %2", id, status);
-        }
-        for(const id of state.hidden) {
-            const missing = GetMissingRequirements(state, loadedConfig, id);
-            if (missing.manualUnlock) {
-                LogError("<i>Unvisited></i> %1: Needed Manual Unlock, %2", id, missing.ids.join(", "));
-            } else {
-                LogError("<i>Unvisited></i> %1: Needed %2", id, missing.ids.join(", "));
-            }
-        }
-        return false;
-    }
 }
 
 function* RunAggregateTrial(count: number, modifiers: RuntimeModifiers) {
@@ -293,36 +354,4 @@ type NodeStatEntry = {
     percentage: number
 };
 
-function OnConfigurationRead(txt: string): void {
-    let config:Configuration;
-    try {
-        config = ParseConfig(txt);
-        if (!config) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Could not load config',
-                text: 'Your file was unable to be parsed into a progression JSON.\nCheck that you are uploading the right file'
-            });
-            return;
-        }
-    } catch(e) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Could not load config',
-            text: sprintf("An error occurred: %1\nCheck that you are uploading the right file", e)
-        });
-        return;
-    }
-
-    const hadConfig = !!loadedConfig;
-    loadedConfig = config;
-    LogWrite("Loaded configuration: %1 nodes, %2 tokens", config.nodes.size, config.tokens.size);
-    runButton.disabled = false;
-    runFullButton.disabled = false;
-    if (!hadConfig) {
-        LogWrite("\n -- Testing Instructions --");
-        LogWrite("Click 'Test (Debug)' to run a single trial");
-        LogWrite("Click 'Run (Aggregate)' to run an aggregate trial");
-        LogWrite("Adjust 'Sample Size' to change the number of samples");
-    }
-}
+// #endregion // Aggregate

@@ -1,4 +1,4 @@
-import { Amount, Configuration, NodeAmountCollection, NodeData, UnlockAuto, UnlockManual } from "./Config";
+import { Amount, ApplyConfigConsts, Configuration, NodeAmountCollection, NodeData, UnlockAuto, UnlockManual } from "./Config";
 import { CopyModifiers, FillModifierDefaults, RuntimeModifiers } from "./Modifiers";
 import { IncrementProperty, List, report, Shuffle, warn } from "./Utils";
 
@@ -40,6 +40,7 @@ export type TraversalStep = {
 };
 
 export enum TraversalFlags {
+    NONE = 0,
     DEBUG = 0x01
 }
 
@@ -93,6 +94,7 @@ export function TraversalReset(state: TraversalState, config: Configuration, nam
         CopyModifiers(modifiers, state.modifiers);
     }
 
+    ApplyConfigConsts(config);
     FillModifierDefaults(state.modifiers, config);
 
     ScanForVisible(state, config, null, flags);
@@ -153,12 +155,12 @@ export function GetMissingRequirements(state: TraversalState, config: Configurat
 
     for(let i = 0, len = node.requires.length; i < len; i++) {
         const req = node.requires[i];
-        if (typeof req.amount == "boolean") {
-            if (state.status[req.id] != req.amount) {
+        if (typeof req.computedAmount == "boolean") {
+            if (state.status[req.id] != req.computedAmount) {
                 missing.ids.push(req.id);
             }
         } else {
-            const val = ResolveValue(state, req.id, req.amount, true);
+            const val = ResolveValue(state, req.id, req.computedAmount, true);
             if (state.status[req.id] < val) {
                 missing.ids.push(req.id);
             }
@@ -300,12 +302,12 @@ function Visit(state: TraversalState, config: Configuration, visitQueue: string[
 function SatisfiesRequirements(state: TraversalState, node: NodeData): boolean {
     for(let i = 0, len = node.requires.length; i < len; i++) {
         const req = node.requires[i];
-        if (typeof req.amount == "boolean") {
-            if (state.status[req.id] != req.amount) {
+        if (typeof req.computedAmount == "boolean") {
+            if (state.status[req.id] != req.computedAmount) {
                 return false;
             }
         } else {
-            const val = ResolveValue(state, req.id, req.amount, true);
+            const val = ResolveValue(state, req.id, req.computedAmount, true);
             if (state.status[req.id] < val) {
                 return false;
             }
@@ -319,7 +321,7 @@ function ApplyRequirements(state: TraversalState, node: NodeData, step: Traversa
     for(let i = 0, len = node.requires.length; i < len; i++) {
         const req = node.requires[i];
         if (req.consume) {
-            const flip = ResolveValue(state, req.id, ToConsume(req.amount));
+            const flip = ResolveValue(state, req.id, ToConsume(req.computedAmount));
             ChangeStatus(state, req.id, flip);
             AddChangeToStep(step, req.id, flip);
         }
@@ -330,7 +332,7 @@ function ApplyResults(state: TraversalState, node: NodeData, step: TraversalStep
     for(let i = 0, len = node.results.length; i < len; i++) {
         const res = node.results[i];
         if (res.consume) {
-            const flip = ResolveValue(state, res.id, ToConsume(res.amount));
+            const flip = ResolveValue(state, res.id, ToConsume(res.computedAmount));
             ChangeStatus(state, res.id, flip);
             AddChangeToStep(step, res.id, flip);
         } else if (res.unlock) {
@@ -339,7 +341,7 @@ function ApplyResults(state: TraversalState, node: NodeData, step: TraversalStep
                 AddChangeToStep(step, res.id, 0, true);
             }
         } else {
-            const val = ResolveValue(state, res.id, res.amount);
+            const val = ResolveValue(state, res.id, res.computedAmount);
             const changed = ChangeStatus(state, res.id, val);
             if (changed != ApplyResult.NO_CHANGE) {
                 AddChangeToStep(step, res.id, val);
@@ -383,11 +385,11 @@ function ChangeStatus(state: TraversalState, id: string, amount: Amount): ApplyR
     } else {
         const newVal = Math.max(0, <number> oldVal + amount);
         state.status[id] = newVal;
-        if (newVal < oldVal) {
+        if (<number> newVal < <number> oldVal) {
             const change = <number> oldVal - newVal;
             IncrementProperty(state.consumedTokens, id, change);
             return ApplyResult.MODIFIED;
-        } else if (newVal > oldVal) {
+        } else if (<number> newVal > <number> oldVal) {
             const change = newVal - <number> oldVal;
             IncrementProperty(state.addedTokens, id, change);
             return ApplyResult.MODIFIED;

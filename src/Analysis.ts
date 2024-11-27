@@ -1,4 +1,4 @@
-import { Amount } from "./Config";
+import { Amount, ConstantCollection, NodeAmountCollection } from "./Config";
 import { TraversalState } from "./Traverse";
 import { List } from "./Utils";
 

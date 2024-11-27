@@ -1,12 +1,24 @@
 // #region Typedefs
 
+import { LogError } from "./Interface";
 import { AssignDefault, sprintf, warn } from "./Utils";
+
+/**
+ * Reference to a constant.
+ */
+export type ConstName = string;
 
 /**
  * A tracked amount of a node.
  * Either a boolean or a number.
  */
 export type Amount = number | boolean;
+
+/**
+ * A tracked amount of a node.
+ * Either a boolean, a number, or a constant reference.
+ */
+export type ConfigAmount = Amount | ConstName;
 
 export const UnlockTraverse: string = "traverse";
 export const UnlockManual: string = "manual";
@@ -23,7 +35,8 @@ export type UnlockType = "traverse" | "manual" | "auto";
  */
 export type NodeRef = {
     id: string,
-    amount: Amount,
+    amount: ConfigAmount,
+    computedAmount: Amount,
     consume: boolean,
     unlock: boolean
 };
@@ -49,13 +62,21 @@ export type NodeAmountCollection = {
 };
 
 /**
+ * Collection of configurable constants.
+ */
+export type ConstantCollection = {
+    [id: string] : number | boolean
+};
+
+/**
  * Callback for exporting token amounts.
  */
 export type NodeReportTokensCallback = (amounts: NodeAmountCollection) => string;
 
 type ConfigJSON = {
     nodes: { [id: string]: NodeData },
-    startWith?: NodeAmountCollection
+    startWith?: NodeAmountCollection,
+    constants?: ConstantCollection
 };
 
 // #endregion // Typedefs
@@ -88,6 +109,11 @@ export class Configuration {
     public readonly startWith: NodeAmountCollection = { };
 
     /**
+     * Constants, for better parsing.
+     */
+    public readonly constants: ConstantCollection = { };
+
+    /**
      * Set of node ids that will not be manually traversed.
      */
     public readonly disableManualTraversal: Set<string> = new Set();
@@ -103,6 +129,10 @@ export function ParseConfig(data: string) : Configuration {
 
     if (parsedJSON.startWith) {
         Object.assign(config.startWith, parsedJSON.startWith);
+    }
+
+    if (parsedJSON.constants) {
+        Object.assign(config.constants, parsedJSON.constants);
     }
 
     if (!parsedJSON.nodes) {
@@ -127,7 +157,23 @@ export function ParseConfig(data: string) : Configuration {
 
     config.ReportTokens = GetTokenReportCallback(config);
 
+    ApplyConfigConsts(config);
+
     return config;
+}
+
+/**
+ * Generates computed values for all node references.
+ */
+export function ApplyConfigConsts(config: Configuration): void {
+    config.nodes.forEach((n) => {
+        for(let i = 0, len = n.requires.length; i < len; i++) {
+            n.requires[i].computedAmount = ComputeValue(n.requires[i].amount, config.constants);
+        }
+        for(let i = 0, len = n.results.length; i < len; i++) {
+            n.results[i].computedAmount = ComputeValue(n.results[i].amount, config.constants);
+        }
+    });
 }
 
 /**
@@ -142,14 +188,14 @@ function ApplyDefaultsToNode(node: NodeData, id: string) {
     if (!node.requires) {
         node.requires = [];
     } else {
-        for(var i = 0, len = node.requires.length; i < len; i++) {
+        for(let i = 0, len = node.requires.length; i < len; i++) {
             ApplyDefaultsToRef(node.requires[i]);
         }
     }
     if (!node.results) {
         node.results = [];
     } else {
-        for(var i = 0, len = node.results.length; i < len; i++) {
+        for(let i = 0, len = node.results.length; i < len; i++) {
             ApplyDefaultsToRef(node.results[i]);
         }
     }
@@ -185,4 +231,18 @@ function GetTokenReportCallback(config: Configuration): NodeReportTokensCallback
         }
         return sprintf(full, buffer);
     };
+}
+
+function ComputeValue(amount: ConfigAmount, consts: ConstantCollection) : Amount {
+    if (typeof amount == "string") {
+        const constVal = consts[amount];
+        if (typeof constVal == "undefined") {
+            warn("constant with id '%1' unable to be found", amount);
+            return true;
+        } else {
+            return constVal;
+        }
+    } else {
+        return amount;
+    }
 }
